@@ -1,80 +1,89 @@
 import * as THREE from 'three';
 
-// Reads right-hand thumbstick for movement, trigger for launch/drop,
-// grip (either hand) for pause. No controller ray/hand models are
-// rendered — this is a tabletop game, not a hand-presence experience.
+// Cardboard 3-DoF input: device-orientation gaze direction, a single
+// monolithic trigger (screen tap / viewer's conductive lever, which
+// browsers surface as an ordinary touchstart/click), and gaze-dwell
+// for pause since there's no second button to bind it to.
 
-export class ControllerInput {
-  constructor(renderer, scene) {
-    this.renderer = renderer;
-    this.thumbstick = { x: 0, y: 0 };
-    this._triggerWasDown = { left: false, right: false };
-    this._gripWasDown = { left: false, right: false };
+const DWELL_TIME_MS = 1200;
+const DWELL_ANGLE_DEG = 9;
 
-    this.onTriggerDown = null; // (handedness) => void
-    this.onGripDown = null;    // (handedness) => void
+export class CardboardInput {
+  constructor(rig, pauseIconWorldGetter) {
+    this.rig = rig;
+    this.getPauseIconWorldPos = pauseIconWorldGetter;
 
-    this.sources = {}; // handedness -> XRInputSource
+    this.onTrigger = null;      // () => void
+    this.onDwellComplete = null; // () => void
 
-    for (let i = 0; i < 2; i++) {
-      const controller = renderer.xr.getController(i);
-      controller.addEventListener('connected', (e) => {
-        const handedness = e.data.handedness || (i === 0 ? 'left' : 'right');
-        this.sources[handedness] = e.data;
-      });
-      controller.addEventListener('disconnected', (e) => {
-        const handedness = e.data && e.data.handedness;
-        if (handedness && this.sources[handedness]) delete this.sources[handedness];
-      });
-      scene.add(controller);
+    this.dwellProgress = 0; // 0..1, exposed for reticle hover visuals
+    this._dwellMs = 0;
+
+    this._forward = new THREE.Vector3();
+    this._toIcon = new THREE.Vector3();
+    this._rigWorldPos = new THREE.Vector3();
+
+    const fire = (e) => {
+      // Ignore taps on the permission/overlay UI — only canvas taps are gameplay triggers
+      if (e.target && e.target.closest && e.target.closest('#vr-enter-overlay')) return;
+      this.onTrigger && this.onTrigger();
+    };
+    window.addEventListener('touchstart', fire, { passive: true });
+    window.addEventListener('mousedown', fire);
+  }
+
+  update(deltaMs) {
+    // Dwell-to-pause: look at the head-locked pause icon for DWELL_TIME_MS
+    this.rig.getWorldDirection(this._forward);
+    this.rig.getWorldPosition(this._rigWorldPos);
+    const iconWorldPos = this.getPauseIconWorldPos();
+
+    this._toIcon.copy(iconWorldPos).sub(this._rigWorldPos).normalize();
+    const angle = THREE.MathUtils.radToDeg(this._forward.angleTo(this._toIcon));
+
+    if (angle < DWELL_ANGLE_DEG) {
+      this._dwellMs += deltaMs;
+      this.dwellProgress = Math.min(this._dwellMs / DWELL_TIME_MS, 1);
+      if (this._dwellMs >= DWELL_TIME_MS) {
+        this._dwellMs = 0;
+        this.dwellProgress = 0;
+        this.onDwellComplete && this.onDwellComplete();
+      }
+    } else {
+      this._dwellMs = 0;
+      this.dwellProgress = 0;
     }
   }
+}
 
-  update() {
-    this.thumbstick.x = 0;
-    this.thumbstick.y = 0;
+// --- Device orientation -> quaternion (standard W3C DeviceOrientation algorithm) ---
+const EULER = new THREE.Euler();
+const Q0 = new THREE.Quaternion();
+const Q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2 around X
+const ZEE = new THREE.Vector3(0, 0, 1);
 
-    for (const handedness of ['left', 'right']) {
-      const src = this.sources[handedness];
-      if (!src || !src.gamepad) continue;
-      const gp = src.gamepad;
+export function orientationToQuaternion(out, alphaDeg, betaDeg, gammaDeg, screenAngleDeg) {
+  const alpha = THREE.MathUtils.degToRad(alphaDeg || 0);
+  const beta = THREE.MathUtils.degToRad(betaDeg || 0);
+  const gamma = THREE.MathUtils.degToRad(gammaDeg || 0);
+  const orient = THREE.MathUtils.degToRad(screenAngleDeg || 0);
 
-      // Movement: prefer right hand thumbstick
-      if (handedness === 'right' && gp.axes && gp.axes.length >= 2) {
-        // Touch controllers report thumbstick on the last two axes
-        const ax = gp.axes[gp.axes.length - 2] || 0;
-        const ay = gp.axes[gp.axes.length - 1] || 0;
-        const deadzone = 0.15;
-        this.thumbstick.x = Math.abs(ax) > deadzone ? ax : 0;
-        this.thumbstick.y = Math.abs(ay) > deadzone ? ay : 0;
-      }
+  EULER.set(beta, alpha, -gamma, 'YXZ');
+  out.setFromEuler(EULER);
+  out.multiply(Q1);
+  out.multiply(Q0.setFromAxisAngle(ZEE, -orient));
+  return out;
+}
 
-      // Trigger = buttons[0], Grip = buttons[1] (standard XR mapping)
-      const triggerDown = !!(gp.buttons[0] && gp.buttons[0].pressed);
-      const gripDown = !!(gp.buttons[1] && gp.buttons[1].pressed);
-
-      if (triggerDown && !this._triggerWasDown[handedness]) {
-        this.onTriggerDown && this.onTriggerDown(handedness);
-      }
-      if (gripDown && !this._gripWasDown[handedness]) {
-        this.onGripDown && this.onGripDown(handedness);
-      }
-      this._triggerWasDown[handedness] = triggerDown;
-      this._gripWasDown[handedness] = gripDown;
+export async function requestMotionPermission() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const result = await DeviceOrientationEvent.requestPermission();
+      return result === 'granted';
+    } catch (e) {
+      return false;
     }
   }
-
-  haptic(handedness, intensity, durationMs) {
-    const src = this.sources[handedness];
-    if (!src || !src.gamepad) return;
-    const actuator = src.gamepad.hapticActuators && src.gamepad.hapticActuators[0];
-    if (actuator && actuator.pulse) {
-      actuator.pulse(Math.min(1, Math.max(0, intensity)), durationMs);
-    }
-  }
-
-  hapticBoth(intensity, durationMs) {
-    this.haptic('left', intensity, durationMs);
-    this.haptic('right', intensity, durationMs);
-  }
+  // Non-iOS or older browsers: no permission gate, assume available if the event exists
+  return typeof DeviceOrientationEvent !== 'undefined';
 }

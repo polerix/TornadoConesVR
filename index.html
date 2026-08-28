@@ -61,15 +61,33 @@
     margin-top: 20px;
     max-width: 480px;
   }
+  #rotate-warning {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: #000;
+    color: #fff;
+    font-family: 'Digibox', sans-serif;
+    font-size: 32px;
+    text-align: center;
+    z-index: 20;
+  }
+  @media (orientation: portrait) {
+    #rotate-warning.armed { display: flex; }
+  }
 </style>
 </head>
 <body>
 
 <div id="vr-enter-overlay">
-  <h1>TORNADO CONES VR</h1>
-  <p>Quest headset required. Right stick steers the disc, right trigger launches / drops it, either grip pauses.</p>
-  <div id="vr-button-slot"></div>
-  <div id="vr-unsupported">This browser doesn't report WebXR immersive-vr support. Open this page in the Quest Browser.</div>
+  <h1>TORNADO CONES</h1>
+  <p>Google Cardboard mode. Landscape orientation, phone in the viewer. Look around to steer, tap the screen (or your viewer's trigger) to launch/drop, look at the pause icon in the corner to pause.</p>
+  <div id="vr-button-slot"><button id="enter-cardboard-btn">ENABLE MOTION &amp; ENTER</button></div>
+  <div id="vr-unsupported">This browser doesn't report device orientation support. Try Safari on iOS, in landscape.</div>
+</div>
+
+<div id="rotate-warning">
+  <div>ROTATE TO LANDSCAPE</div>
 </div>
 
 <script type="importmap">

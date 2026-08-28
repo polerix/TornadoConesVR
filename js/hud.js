@@ -17,8 +17,9 @@ function makeCanvasPanel(width, height) {
 }
 
 export class Hud {
-  constructor(scene) {
+  constructor(scene, rig) {
     this.scene = scene;
+    this.rig = rig;
     this.group = new THREE.Group();
     scene.add(this.group);
 
@@ -53,9 +54,56 @@ export class Hud {
 
     this._announceTimer = null;
 
+    // --- Head-locked reticle (gaze center marker) ---
+    const reticleGeo = new THREE.RingGeometry(0.006, 0.01, 20);
+    const reticleMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false });
+    this.reticle = new THREE.Mesh(reticleGeo, reticleMat);
+    this.reticle.position.set(0, 0, -1.2);
+    this.reticle.renderOrder = 999;
+    this.rig.add(this.reticle);
+
+    // --- Head-locked pause icon (gaze-dwell target) ---
+    this.pauseIconPanel = makeCanvasPanel(256, 256);
+    const pauseGeo = new THREE.CircleGeometry(0.045, 24);
+    this.pauseIcon = new THREE.Mesh(pauseGeo, this.pauseIconPanel.material);
+    this.pauseIcon.position.set(0.32, 0.16, -1.0);
+    this.pauseIcon.renderOrder = 998;
+    this.rig.add(this.pauseIcon);
+    this.drawPauseIcon(0);
+
     this.drawStatus('STANDBY', '#aaaaaa');
     this.drawHighScore(0);
     this.drawTitle();
+  }
+
+  drawPauseIcon(progress) {
+    const { ctx, canvas, texture } = this.pauseIconPanel;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 110, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(20,10,30,0.75)';
+    ctx.fill();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = '#00aaff';
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(cx - 40, cy - 45, 24, 90);
+    ctx.fillRect(cx + 16, cy - 45, 24, 90);
+
+    if (progress > 0) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 100, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = '#00ff88';
+      ctx.stroke();
+    }
+    texture.needsUpdate = true;
+  }
+
+  getPauseIconWorldPosition(target) {
+    return this.pauseIcon.getWorldPosition(target);
   }
 
   drawStatus(text, color = '#ffffff', score = 0) {
