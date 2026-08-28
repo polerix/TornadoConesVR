@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Tornado Cones VR</title>
+<style>
+  @font-face {
+    font-family: 'Digibox';
+    src: url('./assets/fonts/digibox-sharp.otf');
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'VAG Rounded';
+    src: url('./assets/fonts/VAG-Rounded-Regular.ttf');
+    font-display: swap;
+  }
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    width: 100%; height: 100%;
+    background: #000;
+    font-family: 'VAG Rounded', sans-serif;
+  }
+  canvas { display: block; }
+  #vr-enter-overlay {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #fff; background: radial-gradient(circle at center, #1a0033 0%, #000 80%);
+    z-index: 10;
+    text-align: center;
+  }
+  #vr-enter-overlay h1 {
+    font-family: 'Digibox', sans-serif;
+    font-size: 48px;
+    color: #fff;
+    text-shadow: 0 0 20px #ff00ff, 0 0 40px #00aaff;
+    margin-bottom: 20px;
+    letter-spacing: 4px;
+  }
+  #vr-enter-overlay p {
+    color: #aaa;
+    margin-bottom: 30px;
+    max-width: 480px;
+    line-height: 1.5;
+    padding: 0 20px;
+  }
+  #vr-button-slot button {
+    font-family: 'VAG Rounded', sans-serif;
+    font-size: 20px;
+    padding: 16px 40px;
+    background: #00ff00;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 0 20px rgba(0,255,0,0.5);
+  }
+  #vr-unsupported {
+    color: #ff6666;
+    display: none;
+    margin-top: 20px;
+    max-width: 480px;
+  }
+</style>
+</head>
+<body>
+
+<div id="vr-enter-overlay">
+  <h1>TORNADO CONES VR</h1>
+  <p>Quest headset required. Right stick steers the disc, right trigger launches / drops it, either grip pauses.</p>
+  <div id="vr-button-slot"></div>
+  <div id="vr-unsupported">This browser doesn't report WebXR immersive-vr support. Open this page in the Quest Browser.</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
