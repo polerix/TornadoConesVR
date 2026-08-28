@@ -75,15 +75,4 @@ export function orientationToQuaternion(out, alphaDeg, betaDeg, gammaDeg, screen
   return out;
 }
 
-export async function requestMotionPermission() {
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    try {
-      const result = await DeviceOrientationEvent.requestPermission();
-      return result === 'granted';
-    } catch (e) {
-      return false;
-    }
-  }
-  // Non-iOS or older browsers: no permission gate, assume available if the event exists
-  return typeof DeviceOrientationEvent !== 'undefined';
-}
+export { requestMotionPermission } from './permission.js';

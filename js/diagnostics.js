@@ -1,9 +1,9 @@
-// Startup diagnostics: verifies HTTPS, motion sensor availability, and
-// actual live orientation data (not just permission-granted, since the
-// iOS-level Settings > Safari > Motion & Orientation Access toggle can
-// block events even after requestPermission() resolves 'granted').
+// Page entry point. Deliberately imports nothing that touches Three.js
+// or the CDN, so this checklist can run and report status even if the
+// 3D engine (main.js, and its Three.js fetch) fails or is slow.
+// main.js is only ever loaded via dynamic import, after START is tapped.
 
-import { requestMotionPermission } from './input.js';
+import { requestMotionPermission } from './permission.js';
 
 const LIVE_DATA_TIMEOUT_MS = 2500;
 
@@ -37,16 +37,16 @@ function waitForLiveOrientationData(timeoutMs) {
   });
 }
 
-export function initDiagnostics(onStart) {
+function run() {
   const grantBtn = document.getElementById('grant-motion-btn');
   const startBtn = document.getElementById('start-game-btn');
   const fixPanel = document.getElementById('motion-fix-panel');
   const overlay = document.getElementById('vr-enter-overlay');
   const rotateWarning = document.getElementById('rotate-warning');
+  const loadErrorPanel = document.getElementById('load-error-panel');
 
-  const state = { https: false, sensors: false, motion: false, fullscreen: false };
+  const state = { https: false, sensors: false, motion: false };
 
-  // --- Immediate, non-interactive checks ---
   state.https = !!window.isSecureContext;
   setRow('https', state.https ? 'pass' : 'fail',
     state.https ? '' : 'Serve this page over HTTPS (or via localhost).');
@@ -56,7 +56,6 @@ export function initDiagnostics(onStart) {
     state.sensors ? '' : "This browser doesn't expose device orientation. Use Safari on iPhone.");
 
   const fsSupported = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
-  state.fullscreen = fsSupported; // optional — never blocks START
   setRow('fullscreen', fsSupported ? 'pass' : 'warn',
     fsSupported ? '' : 'Not supported on this browser. The game still works, just without hiding browser chrome.');
 
@@ -69,7 +68,6 @@ export function initDiagnostics(onStart) {
   }
   checkReady();
 
-  // --- Motion permission + live-data verification (requires a tap) ---
   grantBtn.addEventListener('click', async () => {
     setRow('motion', 'checking', '');
     fixPanel.classList.add('hidden');
@@ -95,14 +93,30 @@ export function initDiagnostics(onStart) {
     checkReady();
   });
 
-  startBtn.addEventListener('click', () => {
+  startBtn.addEventListener('click', async () => {
     if (document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
     } else if (document.documentElement.webkitRequestFullscreen) {
       document.documentElement.webkitRequestFullscreen();
     }
-    overlay.style.display = 'none';
-    rotateWarning.classList.add('armed');
-    onStart();
+
+    startBtn.disabled = true;
+    startBtn.textContent = 'LOADING...';
+    loadErrorPanel.classList.add('hidden');
+
+    try {
+      const mod = await import('./main.js');
+      overlay.style.display = 'none';
+      rotateWarning.classList.add('armed');
+      mod.startApp();
+    } catch (err) {
+      startBtn.disabled = false;
+      startBtn.textContent = 'START';
+      loadErrorPanel.classList.remove('hidden');
+      loadErrorPanel.textContent = 'Game engine failed to load: ' + (err && err.message ? err.message : String(err)) +
+        ' — usually a blocked or slow CDN fetch. Check your connection and try again.';
+    }
   });
 }
+
+run();

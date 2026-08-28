@@ -120,6 +120,18 @@
   }
   #motion-fix-panel ol { margin: 8px 0 0 18px; padding: 0; }
   #motion-fix-panel li { margin-bottom: 4px; }
+  #load-error-panel {
+    margin-top: 20px;
+    max-width: 420px;
+    text-align: left;
+    background: rgba(255,68,68,0.08);
+    border: 1px solid rgba(255,68,68,0.4);
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: #ffaaaa;
+    font-size: 14px;
+    line-height: 1.5;
+  }
   #vr-unsupported {
     color: #ff6666;
     display: none;
@@ -184,6 +196,8 @@
       <li>Reload this page and tap Grant Motion Access again</li>
     </ol>
   </div>
+
+  <div id="load-error-panel" class="hidden"></div>
 </div>
 
 <div id="rotate-warning">
@@ -198,6 +212,6 @@
   }
 }
 </script>
-<script type="module" src="./js/main.js"></script>
+<script type="module" src="./js/diagnostics.js"></script>
 </body>
 </html>
