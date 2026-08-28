@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { AudioController } from './audio.js';
 import { Hud } from './hud.js';
 import { GameClock } from './clock.js';
-import { CardboardInput, orientationToQuaternion, requestMotionPermission } from './input.js';
+import { CardboardInput, orientationToQuaternion } from './input.js';
+import { initDiagnostics } from './diagnostics.js';
 import { LevelManager } from './level.js';
 import { GridSocket, FlyingDisc, setSharedTextures } from './entities.js';
 import { COLS, ROWS, TABLE_Y, GRID_CENTER_Z, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Z, GRID_MAX_Z, FLY_HEIGHT } from './constants.js';
@@ -240,7 +241,7 @@ function togglePause() {
 
 // ---------------- Input wiring ----------------
 input.onTrigger = () => {
-  if (gameState === 'START') return; // START is handled by the in-scene title tap below
+  if (gameState === 'START') { startGame(); return; } // restart after game over (initial entry is gated by the overlay)
   if (gameState !== 'PLAYING') return;
   AudioController.resume();
   if (activeDisc) dropActiveDisc();
@@ -251,13 +252,8 @@ input.onDwellComplete = () => {
   if (gameState === 'PLAYING' || gameState === 'PAUSED') togglePause();
 };
 
-// Title-screen tap starts the run (separate from the enable-motion gate button)
-window.addEventListener('touchstart', (e) => {
-  if (gameState === 'START' && !e.target.closest('#vr-enter-overlay')) startGame();
-}, { passive: true });
-window.addEventListener('mousedown', (e) => {
-  if (gameState === 'START' && !e.target.closest('#vr-enter-overlay')) startGame();
-});
+// Title screen no longer needs an in-scene tap — the overlay's START
+// button (gated by diagnostics) starts the run directly.
 
 // ---------------- Device orientation ----------------
 let latestOrientation = { alpha: 0, beta: 0, gamma: 0 };
@@ -272,30 +268,11 @@ window.addEventListener('orientationchange', () => {
   screenAngle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
 });
 
-// ---------------- Enable / entry flow ----------------
-const overlay = document.getElementById('vr-enter-overlay');
-const enterBtn = document.getElementById('enter-cardboard-btn');
-const unsupportedMsg = document.getElementById('vr-unsupported');
-const rotateWarning = document.getElementById('rotate-warning');
-
-if (typeof DeviceOrientationEvent === 'undefined') {
-  unsupportedMsg.style.display = 'block';
-}
-
-enterBtn.addEventListener('click', async () => {
-  const granted = await requestMotionPermission();
-  if (!granted) {
-    unsupportedMsg.style.display = 'block';
-    unsupportedMsg.textContent = 'Motion permission denied. Enable it in Settings > Safari > Motion & Orientation Access, then reload.';
-    return;
-  }
+// ---------------- Entry flow (diagnostics-gated) ----------------
+initDiagnostics(() => {
   if (!AudioController.isInit) AudioController.init();
-  if (renderer.domElement.requestFullscreen) {
-    renderer.domElement.requestFullscreen().catch(() => {});
-  }
-  overlay.style.display = 'none';
-  rotateWarning.classList.add('armed');
   resize();
+  startGame();
 });
 
 // ---------------- Main loop ----------------

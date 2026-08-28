@@ -44,17 +44,82 @@
     line-height: 1.5;
     padding: 0 20px;
   }
-  #vr-button-slot button {
+  #check-list {
+    width: 100%;
+    max-width: 420px;
+    margin: 10px 0 25px;
+    text-align: left;
+  }
+  .check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    font-size: 15px;
+  }
+  .check-row.optional {
+    opacity: 0.75;
+  }
+  .check-icon {
+    flex: 0 0 22px;
+    font-size: 18px;
+    font-weight: bold;
+    line-height: 1.4;
+    color: #666;
+  }
+  .check-row.pass .check-icon { color: #00ff66; }
+  .check-row.fail .check-icon { color: #ff4444; }
+  .check-row.checking .check-icon { color: #ffaa00; }
+  .check-row.warn .check-icon { color: #ffaa00; }
+  .check-label {
+    flex: 1;
+    color: #ddd;
+  }
+  .check-fix {
+    display: block;
+    width: 100%;
+    color: #ff8888;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  #grant-motion-btn, #start-game-btn {
     font-family: 'VAG Rounded', sans-serif;
     font-size: 20px;
     padding: 16px 40px;
-    background: #00ff00;
-    color: #000;
     border: none;
     border-radius: 8px;
     cursor: pointer;
+    margin-top: 6px;
+  }
+  #grant-motion-btn {
+    background: #00aaff;
+    color: #001a2b;
+    box-shadow: 0 0 20px rgba(0,170,255,0.5);
+  }
+  #start-game-btn {
+    background: #00ff00;
+    color: #000;
     box-shadow: 0 0 20px rgba(0,255,0,0.5);
   }
+  .hidden { display: none !important; }
+  #motion-fix-panel {
+    margin-top: 20px;
+    max-width: 420px;
+    text-align: left;
+    background: rgba(255,68,68,0.08);
+    border: 1px solid rgba(255,68,68,0.4);
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: #ffaaaa;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  #motion-fix-panel ol { margin: 8px 0 0 18px; padding: 0; }
+  #motion-fix-panel li { margin-bottom: 4px; }
   #vr-unsupported {
     color: #ff6666;
     display: none;
@@ -81,9 +146,44 @@
 
 <div id="vr-enter-overlay">
   <h1>TORNADO CONES</h1>
-  <p>Google Cardboard mode. Landscape orientation, phone in the viewer. Look around to steer, tap the screen (or your viewer's trigger) to launch/drop, look at the pause icon in the corner to pause.</p>
-  <div id="vr-button-slot"><button id="enter-cardboard-btn">ENABLE MOTION &amp; ENTER</button></div>
-  <div id="vr-unsupported">This browser doesn't report device orientation support. Try Safari on iOS, in landscape.</div>
+  <p>Google Cardboard mode. Landscape orientation, phone in the viewer once START is live.</p>
+
+  <div id="check-list">
+    <div class="check-row" data-check="https">
+      <span class="check-icon">•</span>
+      <span class="check-label">Secure connection (HTTPS)</span>
+      <span class="check-fix"></span>
+    </div>
+    <div class="check-row" data-check="sensors">
+      <span class="check-icon">•</span>
+      <span class="check-label">Device motion sensors present</span>
+      <span class="check-fix"></span>
+    </div>
+    <div class="check-row" data-check="motion">
+      <span class="check-icon">•</span>
+      <span class="check-label">Motion &amp; Orientation Access</span>
+      <span class="check-fix"></span>
+    </div>
+    <div class="check-row optional" data-check="fullscreen">
+      <span class="check-icon">•</span>
+      <span class="check-label">Fullscreen support (optional)</span>
+      <span class="check-fix"></span>
+    </div>
+  </div>
+
+  <button id="grant-motion-btn">GRANT MOTION ACCESS</button>
+  <button id="start-game-btn" class="hidden">START</button>
+
+  <div id="motion-fix-panel" class="hidden">
+    <strong>Motion access looks blocked at the OS level.</strong>
+    <ol>
+      <li>Open the iPhone <strong>Settings</strong> app</li>
+      <li>Scroll to <strong>Safari</strong></li>
+      <li>Under Settings for Websites, tap <strong>Motion &amp; Orientation Access</strong></li>
+      <li>Set it to <strong>Allow</strong></li>
+      <li>Reload this page and tap Grant Motion Access again</li>
+    </ol>
+  </div>
 </div>
 
 <div id="rotate-warning">
