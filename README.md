@@ -14,8 +14,17 @@ This started as a Quest/WebXR rewrite (see commit history) using controller thum
 - **Look at the pause icon** in the corner and hold your gaze ~1.2s — pause/resume
 - Tap the in-scene title, or use the START button on the diagnostics screen, to begin
 
-## Fullscreen — known platform limit
-The diagnostics screen's own check reports `document.fullscreenEnabled: false` on both Safari and Chrome-for-iOS on iPhone (Chrome-iOS is WebKit underneath — same engine, same restriction). That means the browser itself is refusing the Fullscreen API for arbitrary page elements, not just for this game. The START button still calls `requestFullscreen()` (with vendor-prefix fallbacks) on every tap since it's a genuine user gesture, and any failure is logged to the console — but if the platform says no, no JS-side trick changes that. A bookmarklet calling the same API from the address bar hits the identical restriction; if it behaves differently in practice that's a gesture-timing quirk worth reporting, not a different code path. The game works fine without fullscreen — you just keep the browser's UI chrome at the edges.
+## Fullscreen — use Add to Home Screen, not the Fullscreen API
+`document.fullscreenEnabled` reports `false` on both Safari and Chrome-for-iOS on iPhone (Chrome-iOS is WebKit underneath — same restriction). The Fullscreen API is a dead end here; iOS refuses it for regular page elements regardless of what triggers the call.
+
+The actual fix is standalone home-screen launch, which is a different iOS mechanism entirely and does remove all browser chrome:
+
+1. Open the site in Safari
+2. Tap Share → **Add to Home Screen**
+3. Confirm **"Open as Web App"** is toggled on (this is the default on iOS 26+; on older versions any site with a proper manifest — which this repo now has — gets standalone treatment automatically)
+4. Launch from the **Home Screen icon**, not from Safari itself
+
+`index.html` now ships `manifest.json`, `apple-mobile-web-app-capable`, and icon meta tags to make this work. The diagnostics screen's fullscreen row checks `navigator.standalone` / `display-mode: standalone` and passes automatically once you're actually running from the Home Screen icon. The START button still attempts `requestFullscreen()` with vendor-prefix fallbacks as a no-cost extra try, but don't expect it to succeed in a normal Safari tab — that's the platform, not this code.
 
 ## Run it
 Static site, HTTPS required for `DeviceOrientationEvent` permission prompts on iOS:

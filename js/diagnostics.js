@@ -66,9 +66,14 @@ function run() {
   setRow('sensors', state.sensors ? 'pass' : 'fail',
     state.sensors ? '' : "This browser doesn't expose device orientation. Use Safari on iPhone.");
 
+  const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
   const fsSupported = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
-  setRow('fullscreen', fsSupported ? 'pass' : 'warn',
-    fsSupported ? '' : 'Not supported on this browser. The game still works, just without hiding browser chrome.');
+  if (isStandalone || fsSupported) {
+    setRow('fullscreen', 'pass', '');
+  } else {
+    setRow('fullscreen', 'warn',
+      "iOS blocks the Fullscreen API for regular pages. Chrome-free is still possible: Share button \u2192 Add to Home Screen \u2192 keep \u201COpen as Web App\u201D on \u2192 launch from that Home Screen icon instead of from Safari.");
+  }
 
   setRow('motion', 'checking', '');
 
