@@ -8,11 +8,24 @@ Play by standing at a floating tabletop grid: launch a disc, survive while it's 
 This started as a Quest/WebXR rewrite (see commit history) using controller thumbstick/trigger/grip input. The actual target hardware turned out to be a Google Cardboard viewer on iPhone — no controller, no thumbstick, no analog trigger, and iOS Safari's WebXR support is inconsistent-to-absent. So this is a full second pass: manual side-by-side stereo rendering via two `THREE.PerspectiveCamera`s instead of a WebXR session, and `DeviceOrientationEvent` for head tracking instead of the WebXR Device API. The core game logic (`entities.js`, `level.js`, `audio.js`, `clock.js`, `constants.js`) didn't need to change — only the render and input layers did.
 
 ## Controls (3-DoF gaze, matches standard Cardboard input model)
-- **Look at a disc socket** — while no disc is in flight, gazing near an available socket highlights it (glow + scale pop); the trigger launches that specific disc instead of a random one
-- **Look** — while the disc is red, it steers toward wherever you're looking on the table
-- **Tap the screen** (or your viewer's built-in trigger/lever) — launch the highlighted disc / drop the active one
+- **Lobby**: look at PLAY / HIGH SCORES / SOUND, pull the trigger to select. No blind tap-to-start — you have to actually be looking at something.
+- **In-game — look at a disc socket** — while no disc is in flight, gazing near an available socket highlights it; the trigger launches that specific disc instead of a random one
+- **In-game — look** — while the disc is red, it steers toward wherever you're looking on the table
+- **Trigger** (screen tap / viewer's built-in lever) — launch the highlighted disc / drop the active one
 - **Look at the pause icon** in the corner and hold your gaze ~1.2s — pause/resume
-- Tap the in-scene title, or use the START button on the diagnostics screen, to begin
+- Game over returns you to the Lobby, not a hard restart
+
+## Lobby
+Persistent hub, not a bypassed title screen — matches the "Lobby as central application state" architecture rather than "startup screen you skip past." First launch and every subsequent return-from-game both land here.
+
+- **PLAY** — starts a run
+- **HIGH SCORES** — toggles a panel showing the local top 5 (stored in `localStorage`, no server/account — this is a single-device leaderboard, not a real one)
+- **SOUND** — single combined SFX+music mute toggle
+
+Deliberately scoped down from a full native-Cardboard-SDK lobby architecture: no QR viewer calibration (that's a native Cardboard SDK concept with no web equivalent — this app doesn't do lens distortion correction at all, see below), no separate Tutorial room (the controls are stated once on the diagnostics screen before entry and again on the title panel — "LOOK AT PLAY, THEN PULL THE TRIGGER" — rather than a dedicated walkthrough flow), no Settings room beyond the one mute toggle. Worth building out further if the single-toggle version feels too thin in practice.
+
+## Environment
+Replaced the old photographic sky-sphere background with an enclosing grid room (gold lines on black, procedurally generated, tileable) matching the reference art — the game now reads as happening inside a defined space rather than floating in a skybox. The room is unlit (`MeshBasicMaterial`) on purpose so the actually-lit table and game props read clearly against it.
 
 ## Fullscreen — use Add to Home Screen, not the Fullscreen API
 `document.fullscreenEnabled` reports `false` on both Safari and Chrome-for-iOS on iPhone (Chrome-iOS is WebKit underneath — same restriction). The Fullscreen API is a dead end here; iOS refuses it for regular page elements regardless of what triggers the call.

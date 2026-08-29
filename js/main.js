@@ -85,21 +85,26 @@ export function startApp() {
   const loader = new THREE.TextureLoader();
   const discTexture = loader.load('./assets/images/disc_texture.png');
   const tornadoTexture = loader.load('./assets/images/tornado_texture.png');
-  const bgTexture = loader.load('./assets/images/backgroundart.png');
   discTexture.colorSpace = THREE.SRGBColorSpace;
   tornadoTexture.colorSpace = THREE.SRGBColorSpace;
-  bgTexture.colorSpace = THREE.SRGBColorSpace;
   setSharedTextures(discTexture, tornadoTexture);
 
-  const skyGeo = new THREE.SphereGeometry(15, 32, 32);
-  const skyMat = new THREE.MeshBasicMaterial({ map: bgTexture, side: THREE.BackSide });
-  scene.add(new THREE.Mesh(skyGeo, skyMat));
+  // Enclosing grid room (gold lines on black, matches reference art) —
+  // replaces the old sky-sphere + separate floor circle with one
+  // contained space, unlit on purpose so the lit table/game props read
+  // clearly against it.
+  const gridRoomTexture = loader.load('./assets/images/grid_room.png');
+  gridRoomTexture.wrapS = THREE.RepeatWrapping;
+  gridRoomTexture.wrapT = THREE.RepeatWrapping;
+  gridRoomTexture.repeat.set(8, 8);
+  gridRoomTexture.colorSpace = THREE.SRGBColorSpace;
 
-  const floorGeo = new THREE.CircleGeometry(6, 48);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x0a0510, roughness: 0.9 });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
+  const ROOM_W = 12, ROOM_H = 6, ROOM_D = 12;
+  const roomGeo = new THREE.BoxGeometry(ROOM_W, ROOM_H, ROOM_D);
+  const roomMat = new THREE.MeshBasicMaterial({ map: gridRoomTexture, side: THREE.BackSide });
+  const room = new THREE.Mesh(roomGeo, roomMat);
+  room.position.set(0, ROOM_H / 2, GRID_CENTER_Z - 0.2);
+  scene.add(room);
 
   const tableGeo = new THREE.BoxGeometry(
     (GRID_MAX_X - GRID_MIN_X) + 0.3, 0.04, (GRID_MAX_Z - GRID_MIN_Z) + 0.3
@@ -118,7 +123,7 @@ export function startApp() {
   const input = new CardboardInput(rig, () => hud.getPauseIconWorldPosition(tmpIconPos));
 
   // ---------------- Game state ----------------
-  let gameState = 'START'; // START, PLAYING, PAUSED
+  let gameState = 'LOBBY'; // LOBBY, PLAYING, PAUSED
   let score = 0;
   let highScore = parseInt(localStorage.getItem('tornadoConesVrHighScore')) || 0;
   let gridLights = [];
@@ -129,6 +134,9 @@ export function startApp() {
   let activeStreakLights = [];
   let consecutiveSuccess = 0;
   let highlightedSocket = null;
+  let lobbyGazedButton = null;
+  let lastLobbyGazed = null;
+  let audioMuted = false;
 
   const world = { entities: [], tornadoes: [], balls: [], cubes: [] };
   const level = new LevelManager(scene, AudioController, gameClock, hud, world);
@@ -141,6 +149,20 @@ export function startApp() {
     hud.drawHighScore(highScore);
   }
   updateHighScore();
+
+  function loadScoreHistory() {
+    try { return JSON.parse(localStorage.getItem('tornadoConesVrScores') || '[]'); }
+    catch (e) { return []; }
+  }
+
+  function saveScoreToHistory(finalScore) {
+    const list = loadScoreHistory();
+    list.push(finalScore);
+    list.sort((a, b) => b - a);
+    const trimmed = list.slice(0, 5);
+    localStorage.setItem('tornadoConesVrScores', JSON.stringify(trimmed));
+    return trimmed;
+  }
 
   level.onLevelComplete = () => { hud.announce('LEVEL UP!', '#00ffff'); };
   level.onBallRingCleared = () => {};
@@ -213,8 +235,9 @@ export function startApp() {
       activeDisc = null;
       const remaining = gridLights.filter(l => l.hasDisc || l.isRestoring).length;
       if (remaining === 0 && gameState === 'PLAYING') {
+        saveScoreToHistory(score);
         hud.announce('YOU LOSE - ALL CONES LOST', '#ff4444');
-        gameClock.after(3000, () => endToStart());
+        gameClock.after(3000, () => returnToLobby());
       }
     };
   }
@@ -228,6 +251,18 @@ export function startApp() {
     hud.announce('DESTROYED!', '#ffffff');
   }
 
+  function enterLobby() {
+    gameState = 'LOBBY';
+    lobbyGazedButton = null;
+    lastLobbyGazed = null;
+    hud.setTitleVisible(true);
+    hud.setLobbyVisible(true);
+    hud.drawTitle();
+    hud.drawPlayButton(false);
+    hud.drawScoresButton(false);
+    hud.drawSoundButton(!audioMuted, false);
+  }
+
   function startGame() {
     gameState = 'PLAYING';
     score = 0;
@@ -237,6 +272,7 @@ export function startApp() {
     highlightedSocket = null;
     gameClock.clearAll();
     hud.setTitleVisible(false);
+    hud.setLobbyVisible(false);
     hud.setHudVisible(true);
     hud.drawStatus('STANDBY', '#aaaaaa', score);
 
@@ -248,8 +284,7 @@ export function startApp() {
     });
   }
 
-  function endToStart() {
-    gameState = 'START';
+  function returnToLobby() {
     highlightedSocket = null;
     world.entities.forEach(e => e.destroy());
     world.entities.length = 0;
@@ -260,8 +295,28 @@ export function startApp() {
     gridLights.forEach(l => l.destroy(scene));
     gridLights = [];
     hud.setHudVisible(false);
-    hud.setTitleVisible(true);
-    hud.drawTitle();
+    enterLobby();
+  }
+
+  function updateLobbyGaze() {
+    rig.getWorldPosition(rayOrigin);
+    rig.getWorldDirection(rayDir);
+    let found = null;
+    let bestAngle = Infinity;
+    hud.getLobbyButtons().forEach(b => {
+      b.mesh.getWorldPosition(gazeTable);
+      gazeTable.sub(rayOrigin).normalize();
+      const angle = rayDir.angleTo(gazeTable);
+      if (angle < 0.17 && angle < bestAngle) { bestAngle = angle; found = b.name; }
+    });
+    lobbyGazedButton = found;
+    hud.pulseLobbyButtons(found);
+    if (found !== lastLobbyGazed) {
+      hud.drawPlayButton(found === 'PLAY');
+      hud.drawScoresButton(found === 'SCORES');
+      hud.drawSoundButton(!audioMuted, found === 'SOUND');
+      lastLobbyGazed = found;
+    }
   }
 
   function togglePause() {
@@ -280,7 +335,20 @@ export function startApp() {
 
   // ---------------- Input wiring ----------------
   input.onTrigger = () => {
-    if (gameState === 'START') { startGame(); return; } // restart after game over
+    if (gameState === 'LOBBY') {
+      AudioController.resume();
+      if (lobbyGazedButton === 'PLAY') {
+        startGame();
+      } else if (lobbyGazedButton === 'SCORES') {
+        hud.toggleScoresPanel(loadScoreHistory());
+      } else if (lobbyGazedButton === 'SOUND') {
+        audioMuted = !audioMuted;
+        AudioController.toggleSfx();
+        AudioController.toggleMusic();
+        hud.drawSoundButton(!audioMuted, true);
+      }
+      return;
+    }
     if (gameState !== 'PLAYING') return;
     AudioController.resume();
     if (activeDisc) dropActiveDisc();
@@ -357,6 +425,10 @@ export function startApp() {
     input.update(deltaMs);
     hud.drawPauseIcon(input.dwellProgress);
 
+    if (gameState === 'LOBBY') {
+      updateLobbyGaze();
+    }
+
     if (gameState === 'PLAYING' && !activeDisc) {
       updateSocketHighlight();
     } else if (highlightedSocket) {
@@ -414,6 +486,6 @@ export function startApp() {
 
   if (!AudioController.isInit) AudioController.init();
   resize();
-  startGame();
+  enterLobby();
   animate();
 }

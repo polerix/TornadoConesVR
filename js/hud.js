@@ -54,6 +54,36 @@ export class Hud {
 
     this._announceTimer = null;
 
+    // --- Lobby buttons (world-fixed, near the title) ---
+    this.playPanel = makeCanvasPanel(600, 200);
+    const playGeo = new THREE.PlaneGeometry(0.55, 0.18);
+    this.playButton = new THREE.Mesh(playGeo, this.playPanel.material);
+    this.playButton.position.set(0, 1.35, GRID_CENTER_Z - 0.35);
+    this.group.add(this.playButton);
+
+    this.scoresBtnPanel = makeCanvasPanel(500, 180);
+    const scoresBtnGeo = new THREE.PlaneGeometry(0.42, 0.15);
+    this.scoresButton = new THREE.Mesh(scoresBtnGeo, this.scoresBtnPanel.material);
+    this.scoresButton.position.set(-0.32, 1.12, GRID_CENTER_Z - 0.35);
+    this.group.add(this.scoresButton);
+
+    this.soundBtnPanel = makeCanvasPanel(500, 180);
+    const soundBtnGeo = new THREE.PlaneGeometry(0.42, 0.15);
+    this.soundButton = new THREE.Mesh(soundBtnGeo, this.soundBtnPanel.material);
+    this.soundButton.position.set(0.32, 1.12, GRID_CENTER_Z - 0.35);
+    this.group.add(this.soundButton);
+
+    this.scoresPanelTex = makeCanvasPanel(700, 560);
+    const scoresPanelGeo = new THREE.PlaneGeometry(0.75, 0.6);
+    this.scoresPanel = new THREE.Mesh(scoresPanelGeo, this.scoresPanelTex.material);
+    this.scoresPanel.position.set(0, 1.6, GRID_CENTER_Z - 0.42);
+    this.scoresPanel.visible = false;
+    this.group.add(this.scoresPanel);
+
+    this.drawPlayButton(false);
+    this.drawScoresButton(false);
+    this.drawSoundButton(true, false);
+
     // --- Head-locked reticle (gaze center marker) ---
     const reticleGeo = new THREE.RingGeometry(0.006, 0.01, 20);
     const reticleMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false });
@@ -159,15 +189,129 @@ export class Hud {
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 110px sans-serif';
     ctx.fillText('TORNADO CONES', canvas.width / 2, 260);
-    ctx.font = 'bold 44px sans-serif';
+    ctx.font = 'bold 40px sans-serif';
     ctx.shadowBlur = 10;
     ctx.fillStyle = '#aaaaaa';
-    ctx.fillText('PULL TRIGGER ON THE DISC TO START', canvas.width / 2, 360);
+    ctx.fillText('LOOK AT PLAY, THEN PULL THE TRIGGER', canvas.width / 2, 360);
     texture.needsUpdate = true;
+  }
+
+  drawPlayButton(highlighted) {
+    const { ctx, canvas, texture } = this.playPanel;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = highlighted ? 'rgba(0,255,100,0.25)' : 'rgba(255,255,255,0.06)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = highlighted ? '#00ff66' : '#00aa44';
+    ctx.lineWidth = highlighted ? 14 : 8;
+    ctx.strokeRect(7, 7, canvas.width - 14, canvas.height - 14);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = highlighted ? '#ffffff' : '#00ff88';
+    ctx.shadowColor = '#00ff66';
+    ctx.shadowBlur = highlighted ? 30 : 12;
+    ctx.font = 'bold 110px sans-serif';
+    ctx.fillText('PLAY', canvas.width / 2, canvas.height / 2 + 38);
+    texture.needsUpdate = true;
+  }
+
+  drawScoresButton(highlighted) {
+    const { ctx, canvas, texture } = this.scoresBtnPanel;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = highlighted ? 'rgba(0,170,255,0.25)' : 'rgba(255,255,255,0.06)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = highlighted ? '#00aaff' : '#0077aa';
+    ctx.lineWidth = highlighted ? 12 : 7;
+    ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = highlighted ? '#ffffff' : '#00aaff';
+    ctx.shadowColor = '#00aaff';
+    ctx.shadowBlur = highlighted ? 24 : 10;
+    ctx.font = 'bold 56px sans-serif';
+    ctx.fillText('HIGH SCORES', canvas.width / 2, canvas.height / 2 + 20);
+    texture.needsUpdate = true;
+  }
+
+  drawSoundButton(soundOn, highlighted) {
+    const { ctx, canvas, texture } = this.soundBtnPanel;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = highlighted ? 'rgba(255,170,0,0.25)' : 'rgba(255,255,255,0.06)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = highlighted ? '#ffaa00' : '#aa7700';
+    ctx.lineWidth = highlighted ? 12 : 7;
+    ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = highlighted ? '#ffffff' : '#ffaa00';
+    ctx.shadowColor = '#ffaa00';
+    ctx.shadowBlur = highlighted ? 24 : 10;
+    ctx.font = 'bold 56px sans-serif';
+    ctx.fillText('SOUND: ' + (soundOn ? 'ON' : 'OFF'), canvas.width / 2, canvas.height / 2 + 20);
+    texture.needsUpdate = true;
+  }
+
+  drawScoresPanel(list) {
+    const { ctx, canvas, texture } = this.scoresPanelTex;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(10,5,20,0.94)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#00aaff';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#00aaff';
+    ctx.shadowColor = '#00aaff';
+    ctx.shadowBlur = 16;
+    ctx.font = 'bold 54px sans-serif';
+    ctx.fillText('TOP SCORES', canvas.width / 2, 80);
+    ctx.shadowBlur = 0;
+
+    if (!list || list.length === 0) {
+      ctx.fillStyle = '#888';
+      ctx.font = '40px sans-serif';
+      ctx.fillText('No runs yet', canvas.width / 2, 200);
+    } else {
+      list.forEach((s, i) => {
+        ctx.fillStyle = i === 0 ? '#ffd700' : '#ffffff';
+        ctx.font = 'bold 48px sans-serif';
+        ctx.fillText((i + 1) + '.  ' + s, canvas.width / 2, 170 + i * 70);
+      });
+    }
+
+    ctx.font = '28px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText('look at HIGH SCORES again to close', canvas.width / 2, canvas.height - 30);
+    texture.needsUpdate = true;
+  }
+
+  toggleScoresPanel(list) {
+    this.scoresPanel.visible = !this.scoresPanel.visible;
+    if (this.scoresPanel.visible) this.drawScoresPanel(list);
+    return this.scoresPanel.visible;
+  }
+
+  getLobbyButtons() {
+    return [
+      { name: 'PLAY', mesh: this.playButton },
+      { name: 'SCORES', mesh: this.scoresButton },
+      { name: 'SOUND', mesh: this.soundButton }
+    ];
+  }
+
+  pulseLobbyButtons(gazedName) {
+    this.getLobbyButtons().forEach(b => {
+      const target = (b.name === gazedName) ? 1.12 : 1.0;
+      const s = b.mesh.scale.x + (target - b.mesh.scale.x) * 0.2;
+      b.mesh.scale.setScalar(s);
+    });
   }
 
   setTitleVisible(visible) {
     this.titleMesh.visible = visible;
+  }
+
+  setLobbyVisible(visible) {
+    this.playButton.visible = visible;
+    this.scoresButton.visible = visible;
+    this.soundButton.visible = visible;
+    if (!visible) this.scoresPanel.visible = false;
   }
 
   setHudVisible(visible) {
