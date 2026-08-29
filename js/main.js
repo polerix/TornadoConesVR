@@ -4,8 +4,8 @@ import { Hud } from './hud.js';
 import { GameClock } from './clock.js';
 import { CardboardInput, orientationToQuaternion } from './input.js';
 import { LevelManager } from './level.js';
-import { GridSocket, FlyingDisc, setSharedTextures } from './entities.js';
-import { COLS, ROWS, TABLE_Y, GRID_CENTER_Z, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Z, GRID_MAX_Z, FLY_HEIGHT } from './constants.js';
+import { GridSocket, FlyingDisc, setSharedTextures, FLY_HEIGHT } from './entities.js';
+import { COLS, ROWS, TABLE_Y, GRID_CENTER_Z, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Z, GRID_MAX_Z } from './constants.js';
 
 // Entry point is deliberately NOT this module's top-level code.
 // diagnostics.js (zero Three.js dependency) is the actual page entry
