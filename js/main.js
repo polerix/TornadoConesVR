@@ -5,7 +5,7 @@ import { GameClock } from './clock.js';
 import { CardboardInput, orientationToQuaternion } from './input.js';
 import { LevelManager } from './level.js';
 import { GridSocket, FlyingDisc, setSharedTextures, FLY_HEIGHT } from './entities.js';
-import { COLS, ROWS, TABLE_Y, GRID_CENTER_Z, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Z, GRID_MAX_Z } from './constants.js';
+import { COLS, ROWS, TABLE_Y, GRID_CENTER_Z, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Z, GRID_MAX_Z, PITCH } from './constants.js';
 
 // Entry point is deliberately NOT this module's top-level code.
 // diagnostics.js (zero Three.js dependency) is the actual page entry
@@ -106,6 +106,7 @@ export function startApp() {
   let streakRestores = 0;
   let activeStreakLights = [];
   let consecutiveSuccess = 0;
+  let highlightedSocket = null;
 
   const world = { entities: [], tornadoes: [], balls: [], cubes: [] };
   const level = new LevelManager(scene, AudioController, gameClock, hud, world);
@@ -140,10 +141,17 @@ export function startApp() {
 
   function launchDisc() {
     if (activeDisc) return;
-    const available = gridLights.filter(l => l.hasDisc);
+    const available = gridLights.filter(l => l.hasDisc && !l.isRestoring);
     if (available.length === 0) return;
 
-    const choice = available[Math.floor(Math.random() * available.length)];
+    let choice;
+    if (highlightedSocket && highlightedSocket.hasDisc && !highlightedSocket.isRestoring) {
+      choice = highlightedSocket;
+    } else {
+      choice = available[Math.floor(Math.random() * available.length)];
+    }
+    if (highlightedSocket) { highlightedSocket.setGazeHighlight(false); highlightedSocket = null; }
+
     choice.hasDisc = false;
     choice.updateVisuals();
 
@@ -204,6 +212,7 @@ export function startApp() {
     consecutiveSuccess = 0;
     streakRestores = 0;
     activeStreakLights.length = 0;
+    highlightedSocket = null;
     gameClock.clearAll();
     hud.setTitleVisible(false);
     hud.setHudVisible(true);
@@ -219,6 +228,7 @@ export function startApp() {
 
   function endToStart() {
     gameState = 'START';
+    highlightedSocket = null;
     world.entities.forEach(e => e.destroy());
     world.entities.length = 0;
     world.tornadoes.length = 0;
@@ -277,19 +287,39 @@ export function startApp() {
   // ---------------- Main loop ----------------
   const clock3 = new THREE.Clock();
   const gazeTarget = new THREE.Vector3();
+  const gazeTable = new THREE.Vector3();
   const rayOrigin = new THREE.Vector3();
   const rayDir = new THREE.Vector3();
 
-  function raycastToTable(outVec) {
+  function raycastToPlane(outVec, planeY) {
     rig.getWorldPosition(rayOrigin);
     rig.getWorldDirection(rayDir);
-    const planeY = TABLE_Y + FLY_HEIGHT;
     const denom = rayDir.y;
     if (Math.abs(denom) < 0.05) return false;
     const t = (planeY - rayOrigin.y) / denom;
     if (t <= 0) return false;
     outVec.set(rayOrigin.x + rayDir.x * t, planeY, rayOrigin.z + rayDir.z * t);
     return true;
+  }
+
+  const SELECTION_RADIUS = PITCH * 0.7;
+
+  function updateSocketHighlight() {
+    let newTarget = null;
+    if (raycastToPlane(gazeTable, TABLE_Y)) {
+      let minD = Infinity;
+      gridLights.forEach(l => {
+        if (!l.hasDisc || l.isRestoring) return;
+        const d = Math.hypot(l.x - gazeTable.x, l.z - gazeTable.z);
+        if (d < minD) { minD = d; newTarget = l; }
+      });
+      if (newTarget && minD > SELECTION_RADIUS) newTarget = null;
+    }
+    if (newTarget !== highlightedSocket) {
+      if (highlightedSocket) highlightedSocket.setGazeHighlight(false);
+      if (newTarget) newTarget.setGazeHighlight(true);
+      highlightedSocket = newTarget;
+    }
   }
 
   function animate() {
@@ -305,10 +335,17 @@ export function startApp() {
     input.update(deltaMs);
     hud.drawPauseIcon(input.dwellProgress);
 
+    if (gameState === 'PLAYING' && !activeDisc) {
+      updateSocketHighlight();
+    } else if (highlightedSocket) {
+      highlightedSocket.setGazeHighlight(false);
+      highlightedSocket = null;
+    }
+
     if (gameState === 'PLAYING' && dt > 0) {
       let steerDir = { x: 0, y: 0 };
       if (activeDisc && activeDisc.state === 'flying' && !activeDisc.isGreen) {
-        if (raycastToTable(gazeTarget)) {
+        if (raycastToPlane(gazeTarget, TABLE_Y + FLY_HEIGHT)) {
           const dx = gazeTarget.x - activeDisc.x;
           const dz = gazeTarget.z - activeDisc.z;
           const dist = Math.hypot(dx, dz);

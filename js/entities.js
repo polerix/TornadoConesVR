@@ -38,6 +38,7 @@ export class GridSocket {
     this.hasDisc = true;
     this.isRestoring = false;
     this.ringActive = false;
+    this.gazeHighlighted = false;
     this.idlePhase = Math.random() * Math.PI * 2;
 
     const geo = new THREE.CylinderGeometry(CELL / 2, CELL / 2, 0.01, 24);
@@ -66,11 +67,17 @@ export class GridSocket {
     const mat = this.mesh.material;
     if (this.hasDisc) {
       mat.color.setHex(0xffffff);
-      mat.emissive.setHex(0x000000);
+      mat.emissive.setHex(this.gazeHighlighted ? 0x33aa33 : 0x000000);
     } else {
       mat.color.setHex(0x333333);
       mat.emissive.setHex(0x000000);
     }
+  }
+
+  setGazeHighlight(active) {
+    if (this.gazeHighlighted === active) return;
+    this.gazeHighlighted = active;
+    this.updateVisuals();
   }
 
   setRing(active) {
@@ -135,6 +142,10 @@ export class GridSocket {
 
     this.mesh.position.y = TABLE_Y + h;
     this.ringMesh.position.y = TABLE_Y + h + 0.006;
+
+    // Gaze-hover pop
+    const targetScale = this.gazeHighlighted ? 1.18 : 1.0;
+    this.mesh.scale.setScalar(this.mesh.scale.x + (targetScale - this.mesh.scale.x) * 0.2);
 
     // Flip animation: rotate on X, swap state handled via clock.after above
     if (this.isRestoring) {

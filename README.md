@@ -8,10 +8,14 @@ Play by standing at a floating tabletop grid: launch a disc, survive while it's 
 This started as a Quest/WebXR rewrite (see commit history) using controller thumbstick/trigger/grip input. The actual target hardware turned out to be a Google Cardboard viewer on iPhone — no controller, no thumbstick, no analog trigger, and iOS Safari's WebXR support is inconsistent-to-absent. So this is a full second pass: manual side-by-side stereo rendering via two `THREE.PerspectiveCamera`s instead of a WebXR session, and `DeviceOrientationEvent` for head tracking instead of the WebXR Device API. The core game logic (`entities.js`, `level.js`, `audio.js`, `clock.js`, `constants.js`) didn't need to change — only the render and input layers did.
 
 ## Controls (3-DoF gaze, matches standard Cardboard input model)
-- **Look** — while the disc is red, it steers toward wherever you're looking on the table (ray-cast from head direction onto the play plane)
-- **Tap the screen** (or your viewer's built-in trigger/lever, which registers as a touch event) — launch a disc / drop the active one
-- **Look at the pause icon** in the corner and hold your gaze ~1.2s — pause/resume (dwell-to-select, since there's no second button)
-- Tap anywhere on the title screen to start a run
+- **Look at a disc socket** — while no disc is in flight, gazing near an available socket highlights it (glow + scale pop); the trigger launches that specific disc instead of a random one
+- **Look** — while the disc is red, it steers toward wherever you're looking on the table
+- **Tap the screen** (or your viewer's built-in trigger/lever) — launch the highlighted disc / drop the active one
+- **Look at the pause icon** in the corner and hold your gaze ~1.2s — pause/resume
+- Tap the in-scene title, or use the START button on the diagnostics screen, to begin
+
+## Fullscreen — known platform limit
+The diagnostics screen's own check reports `document.fullscreenEnabled: false` on both Safari and Chrome-for-iOS on iPhone (Chrome-iOS is WebKit underneath — same engine, same restriction). That means the browser itself is refusing the Fullscreen API for arbitrary page elements, not just for this game. The START button still calls `requestFullscreen()` (with vendor-prefix fallbacks) on every tap since it's a genuine user gesture, and any failure is logged to the console — but if the platform says no, no JS-side trick changes that. A bookmarklet calling the same API from the address bar hits the identical restriction; if it behaves differently in practice that's a gesture-timing quirk worth reporting, not a different code path. The game works fine without fullscreen — you just keep the browser's UI chrome at the edges.
 
 ## Run it
 Static site, HTTPS required for `DeviceOrientationEvent` permission prompts on iOS:

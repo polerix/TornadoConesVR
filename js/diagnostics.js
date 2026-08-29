@@ -37,6 +37,17 @@ function waitForLiveOrientationData(timeoutMs) {
   });
 }
 
+function attemptFullscreen() {
+  const el = document.documentElement;
+  const request = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (!request) {
+    return Promise.reject(new Error('No requestFullscreen method exists on this browser at all.'));
+  }
+  const result = request.call(el);
+  // Older WebKit prefixed versions don't return a Promise — normalize.
+  return result && typeof result.then === 'function' ? result : Promise.resolve();
+}
+
 function run() {
   const grantBtn = document.getElementById('grant-motion-btn');
   const startBtn = document.getElementById('start-game-btn');
@@ -94,10 +105,11 @@ function run() {
   });
 
   startBtn.addEventListener('click', async () => {
-    if (document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else if (document.documentElement.webkitRequestFullscreen) {
-      document.documentElement.webkitRequestFullscreen();
+    let fsError = null;
+    try {
+      await attemptFullscreen();
+    } catch (err) {
+      fsError = err;
     }
 
     startBtn.disabled = true;
@@ -109,6 +121,9 @@ function run() {
       overlay.style.display = 'none';
       rotateWarning.classList.add('armed');
       mod.startApp();
+      if (fsError) {
+        console.warn('Fullscreen request failed:', fsError.message || fsError);
+      }
     } catch (err) {
       startBtn.disabled = false;
       startBtn.textContent = 'START';
