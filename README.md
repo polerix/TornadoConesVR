@@ -18,11 +18,14 @@ This started as a Quest/WebXR rewrite (see commit history) using controller thum
 ## Lobby
 Persistent hub, not a bypassed title screen — matches the "Lobby as central application state" architecture rather than "startup screen you skip past." First launch and every subsequent return-from-game both land here.
 
-- **PLAY** — starts a run
-- **HIGH SCORES** — toggles a panel showing the local top 5 (stored in `localStorage`, no server/account — this is a single-device leaderboard, not a real one)
-- **SOUND** — single combined SFX+music mute toggle
+- **PLAY / HIGH SCORES / SOUND** — selected by **dwell**, not trigger-click: hold your gaze steady on a button for ~1.4s and a fill bar animates across it, confirming on completion. This is deliberate: it's the same "be still to select" language as the in-game pause icon, and it's discoverable by *watching it happen* rather than reading instructions — the fill bar IS the tutorial.
+- **Demo disc**: a decorative, non-scored disc bounces around the room off the walls, chased by a tornado on the stage exactly like real gameplay — same red→green→caught color language, same tornado-chase visuals, different physics (bounces instead of grid-clamping, since it roams the whole room). Pull the trigger while none is active to launch one yourself; look near it while it flies to nudge its direction (weaker, cumulative pull — not full control, doesn't fight you like a stuck controller). If the player never touches the trigger, one launches on its own after ~6s idle, so the mechanic is visible even to someone who hasn't found the trigger yet. This is the answer to "show, don't tell" for a device with no on-screen buttons.
+- **HIGH SCORES** panel shows the local top 5 (stored in `localStorage`, single-device only — not a real leaderboard).
 
-Deliberately scoped down from a full native-Cardboard-SDK lobby architecture: no QR viewer calibration (that's a native Cardboard SDK concept with no web equivalent — this app doesn't do lens distortion correction at all, see below), no separate Tutorial room (the controls are stated once on the diagnostics screen before entry and again on the title panel — "LOOK AT PLAY, THEN PULL THE TRIGGER" — rather than a dedicated walkthrough flow), no Settings room beyond the one mute toggle. Worth building out further if the single-toggle version feels too thin in practice.
+Deliberately scoped down from a full native-Cardboard-SDK lobby architecture: no QR viewer calibration (no web equivalent, no lens distortion correction at all — see Environment below), no separate Tutorial room (the demo disc + dwell bars serve that purpose by demonstration), no Settings room beyond the one sound toggle.
+
+## Core gameplay change: tug-of-war steering
+The tornado now passively pulls a red (uncaught) disc toward itself the entire time it's in flight, not just once it turns green. Previously the red phase was free-roam — sit anywhere safely, no urgency. Now standing still means drifting into the tornado; you have to actively counter-steer (look away from the pull) continuously. `TORNADO_PULL_SPEED` (0.18 m/s) is set below `DISC_MOVE_SPEED` (0.55 m/s) so active counter-steering reliably wins — the tension is about *sustained attention*, not a fight you can lose by playing correctly. Worth retuning that gap if it feels too easy or too twitchy once actually tested in the headset.
 
 ## Environment
 Replaced the old photographic sky-sphere background with an enclosing grid room (gold lines on black, procedurally generated, tileable) matching the reference art — the game now reads as happening inside a defined space rather than floating in a skybox. The room is unlit (`MeshBasicMaterial`) on purpose so the actually-lit table and game props read clearly against it.

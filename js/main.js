@@ -4,7 +4,7 @@ import { Hud } from './hud.js';
 import { GameClock } from './clock.js';
 import { CardboardInput, orientationToQuaternion } from './input.js';
 import { LevelManager } from './level.js';
-import { GridSocket, FlyingDisc, setSharedTextures, FLY_HEIGHT } from './entities.js';
+import { GridSocket, FlyingDisc, DemoDisc, DiscTornado, setSharedTextures, FLY_HEIGHT } from './entities.js';
 import { COLS, ROWS, TABLE_Y, GRID_CENTER_Z, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Z, GRID_MAX_Z, PITCH } from './constants.js';
 
 // Entry point is deliberately NOT this module's top-level code.
@@ -137,6 +137,14 @@ export function startApp() {
   let lobbyGazedButton = null;
   let lastLobbyGazed = null;
   let audioMuted = false;
+  let demoTornado = null;
+  let demoDisc = null;
+  let lastDemoTriggerMs = -99999;
+  let lobbyDwellMs = 0;
+  const lobbyButtonDrawState = { PLAY: false, SCORES: false, SOUND: false };
+  const LOBBY_DWELL_MS = 1400;
+  const DEMO_IDLE_RESPAWN_MS = 6000;
+  const DEMO_BOUNDS = { minX: -3, maxX: 3, minZ: -6, maxZ: -0.6 };
 
   const world = { entities: [], tornadoes: [], balls: [], cubes: [] };
   const level = new LevelManager(scene, AudioController, gameClock, hud, world);
@@ -255,12 +263,15 @@ export function startApp() {
     gameState = 'LOBBY';
     lobbyGazedButton = null;
     lastLobbyGazed = null;
+    lobbyDwellMs = 0;
+    lastDemoTriggerMs = gameClock.elapsed;
     hud.setTitleVisible(true);
     hud.setLobbyVisible(true);
     hud.drawTitle();
     hud.drawPlayButton(false);
     hud.drawScoresButton(false);
     hud.drawSoundButton(!audioMuted, false);
+    if (!demoTornado) demoTornado = new DiscTornado(1.0, scene, AudioController);
   }
 
   function startGame() {
@@ -275,6 +286,9 @@ export function startApp() {
     hud.setLobbyVisible(false);
     hud.setHudVisible(true);
     hud.drawStatus('STANDBY', '#aaaaaa', score);
+
+    if (demoDisc) { demoDisc.destroy(); demoDisc = null; }
+    if (demoTornado) { demoTornado.destroy(); demoTornado = null; }
 
     buildGrid();
     level.init();
@@ -298,7 +312,19 @@ export function startApp() {
     enterLobby();
   }
 
-  function updateLobbyGaze() {
+  function activateLobbyButton(name) {
+    if (name === 'PLAY') {
+      startGame();
+    } else if (name === 'SCORES') {
+      hud.toggleScoresPanel(loadScoreHistory());
+    } else if (name === 'SOUND') {
+      audioMuted = !audioMuted;
+      AudioController.toggleSfx();
+      AudioController.toggleMusic();
+    }
+  }
+
+  function updateLobbyGaze(deltaMs) {
     rig.getWorldPosition(rayOrigin);
     rig.getWorldDirection(rayDir);
     let found = null;
@@ -309,14 +335,47 @@ export function startApp() {
       const angle = rayDir.angleTo(gazeTable);
       if (angle < 0.17 && angle < bestAngle) { bestAngle = angle; found = b.name; }
     });
-    lobbyGazedButton = found;
-    hud.pulseLobbyButtons(found);
+
     if (found !== lastLobbyGazed) {
-      hud.drawPlayButton(found === 'PLAY');
-      hud.drawScoresButton(found === 'SCORES');
-      hud.drawSoundButton(!audioMuted, found === 'SOUND');
+      lobbyDwellMs = 0;
       lastLobbyGazed = found;
     }
+    lobbyGazedButton = found;
+    hud.pulseLobbyButtons(found);
+
+    let progress = 0;
+    let fired = false;
+    if (found) {
+      lobbyDwellMs += deltaMs;
+      progress = Math.min(lobbyDwellMs / LOBBY_DWELL_MS, 1);
+      if (lobbyDwellMs >= LOBBY_DWELL_MS) {
+        fired = true;
+      }
+    }
+
+    ['PLAY', 'SCORES', 'SOUND'].forEach(name => {
+      const isTarget = found === name && !fired;
+      const p = isTarget ? progress : 0;
+      if (isTarget || lobbyButtonDrawState[name]) {
+        if (name === 'PLAY') hud.drawPlayButton(isTarget, p);
+        else if (name === 'SCORES') hud.drawScoresButton(isTarget, p);
+        else hud.drawSoundButton(!audioMuted, isTarget, p);
+        lobbyButtonDrawState[name] = isTarget;
+      }
+    });
+
+    if (fired) {
+      const name = found;
+      lobbyDwellMs = 0;
+      lastLobbyGazed = null;
+      lobbyGazedButton = null;
+      activateLobbyButton(name);
+    }
+  }
+
+  function spawnDemoDisc() {
+    if (demoDisc) return;
+    demoDisc = new DemoDisc(scene, 0, GRID_CENTER_Z, TABLE_Y + FLY_HEIGHT, DEMO_BOUNDS);
   }
 
   function togglePause() {
@@ -337,15 +396,9 @@ export function startApp() {
   input.onTrigger = () => {
     if (gameState === 'LOBBY') {
       AudioController.resume();
-      if (lobbyGazedButton === 'PLAY') {
-        startGame();
-      } else if (lobbyGazedButton === 'SCORES') {
-        hud.toggleScoresPanel(loadScoreHistory());
-      } else if (lobbyGazedButton === 'SOUND') {
-        audioMuted = !audioMuted;
-        AudioController.toggleSfx();
-        AudioController.toggleMusic();
-        hud.drawSoundButton(!audioMuted, true);
+      if (!demoDisc) {
+        spawnDemoDisc();
+        lastDemoTriggerMs = gameClock.elapsed;
       }
       return;
     }
@@ -426,7 +479,25 @@ export function startApp() {
     hud.drawPauseIcon(input.dwellProgress);
 
     if (gameState === 'LOBBY') {
-      updateLobbyGaze();
+      updateLobbyGaze(deltaMs);
+
+      if (demoTornado) demoTornado.update(dt, now, demoDisc);
+
+      if (demoDisc) {
+        if (raycastToPlane(gazeTable, TABLE_Y + FLY_HEIGHT)) {
+          const dx = gazeTable.x - demoDisc.x, dz = gazeTable.z - demoDisc.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist > 0.05) demoDisc.nudge(dx / dist, dz / dist, dt);
+        }
+        demoDisc.update(dt, demoTornado);
+        if (demoDisc.done) {
+          demoDisc = null;
+          lastDemoTriggerMs = now;
+        }
+      } else if (now - lastDemoTriggerMs > DEMO_IDLE_RESPAWN_MS) {
+        spawnDemoDisc();
+        lastDemoTriggerMs = now;
+      }
     }
 
     if (gameState === 'PLAYING' && !activeDisc) {

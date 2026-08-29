@@ -16,6 +16,22 @@ function makeCanvasPanel(width, height) {
   return { canvas, ctx, texture, material };
 }
 
+// "Be still to select" — a bottom fill bar showing dwell progress toward
+// activation. This is the primary discoverability mechanism: the player
+// learns the interaction by watching it fill as they hold their gaze.
+function drawDwellBar(ctx, canvas, progress, color) {
+  if (progress <= 0) return;
+  const barH = Math.max(10, canvas.height * 0.07);
+  const margin = canvas.width * 0.04;
+  const barW = canvas.width - margin * 2;
+  const y = canvas.height - barH - margin * 0.6;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(margin, y, barW, barH);
+  ctx.fillStyle = color;
+  ctx.fillRect(margin, y, barW * progress, barH);
+}
+
 export class Hud {
   constructor(scene, rig) {
     this.scene = scene;
@@ -192,11 +208,11 @@ export class Hud {
     ctx.font = 'bold 40px sans-serif';
     ctx.shadowBlur = 10;
     ctx.fillStyle = '#aaaaaa';
-    ctx.fillText('LOOK AT PLAY, THEN PULL THE TRIGGER', canvas.width / 2, 360);
+    ctx.fillText('HOLD YOUR GAZE STEADY TO SELECT', canvas.width / 2, 360);
     texture.needsUpdate = true;
   }
 
-  drawPlayButton(highlighted) {
+  drawPlayButton(highlighted, progress = 0) {
     const { ctx, canvas, texture } = this.playPanel;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = highlighted ? 'rgba(0,255,100,0.25)' : 'rgba(255,255,255,0.06)';
@@ -209,11 +225,12 @@ export class Hud {
     ctx.shadowColor = '#00ff66';
     ctx.shadowBlur = highlighted ? 30 : 12;
     ctx.font = 'bold 110px sans-serif';
-    ctx.fillText('PLAY', canvas.width / 2, canvas.height / 2 + 38);
+    ctx.fillText('PLAY', canvas.width / 2, canvas.height / 2 + (progress > 0 ? 20 : 38));
+    drawDwellBar(ctx, canvas, progress, '#00ff66');
     texture.needsUpdate = true;
   }
 
-  drawScoresButton(highlighted) {
+  drawScoresButton(highlighted, progress = 0) {
     const { ctx, canvas, texture } = this.scoresBtnPanel;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = highlighted ? 'rgba(0,170,255,0.25)' : 'rgba(255,255,255,0.06)';
@@ -226,11 +243,12 @@ export class Hud {
     ctx.shadowColor = '#00aaff';
     ctx.shadowBlur = highlighted ? 24 : 10;
     ctx.font = 'bold 56px sans-serif';
-    ctx.fillText('HIGH SCORES', canvas.width / 2, canvas.height / 2 + 20);
+    ctx.fillText('HIGH SCORES', canvas.width / 2, canvas.height / 2 + (progress > 0 ? 4 : 20));
+    drawDwellBar(ctx, canvas, progress, '#00aaff');
     texture.needsUpdate = true;
   }
 
-  drawSoundButton(soundOn, highlighted) {
+  drawSoundButton(soundOn, highlighted, progress = 0) {
     const { ctx, canvas, texture } = this.soundBtnPanel;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = highlighted ? 'rgba(255,170,0,0.25)' : 'rgba(255,255,255,0.06)';
@@ -243,7 +261,8 @@ export class Hud {
     ctx.shadowColor = '#ffaa00';
     ctx.shadowBlur = highlighted ? 24 : 10;
     ctx.font = 'bold 56px sans-serif';
-    ctx.fillText('SOUND: ' + (soundOn ? 'ON' : 'OFF'), canvas.width / 2, canvas.height / 2 + 20);
+    ctx.fillText('SOUND: ' + (soundOn ? 'ON' : 'OFF'), canvas.width / 2, canvas.height / 2 + (progress > 0 ? 4 : 20));
+    drawDwellBar(ctx, canvas, progress, '#ffaa00');
     texture.needsUpdate = true;
   }
 

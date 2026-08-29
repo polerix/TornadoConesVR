@@ -15,6 +15,7 @@ export const TORNADO_TOP_R = 0.24;
 export const TORNADO_HEIGHT = 0.5;
 export const TORNADO_CHASE_SPEED_RED = 0.28;
 export const TORNADO_CHASE_SPEED_GREEN = 0.45;
+export const TORNADO_PULL_SPEED = 0.18;      // passive tug-of-war pull on a red disc, per second
 export const DISC_RADIUS = 0.11;
 
 export function tornadoRadiusAtNormHeight(h) {
@@ -253,7 +254,21 @@ export class FlyingDisc {
           this.z += (target.z - this.z) * k;
         }
       } else {
-        // Thumbstick control (red state only)
+        // Tug-of-war: the tornado passively pulls the disc even while
+        // red. Player must actively counter-steer (gaze away from the
+        // pull) or the disc drifts in on its own — steering isn't free
+        // roam anymore, it's continuous resistance.
+        let pullTarget = null, pullMinD = Infinity;
+        tornadoes.forEach(t => {
+          const d = Math.hypot(t.x - this.x, t.z - this.z);
+          if (d < pullMinD) { pullMinD = d; pullTarget = t; }
+        });
+        if (pullTarget && pullMinD > 0.02) {
+          this.x += ((pullTarget.x - this.x) / pullMinD) * TORNADO_PULL_SPEED * dt;
+          this.z += ((pullTarget.z - this.z) / pullMinD) * TORNADO_PULL_SPEED * dt;
+        }
+
+        // Gaze/thumbstick counter-steer
         let speed = DISC_MOVE_SPEED;
 
         const distOut = Math.max(
@@ -470,6 +485,104 @@ export class GreenBall {
     }
 
     this.mesh.position.set(this.x, TABLE_Y + this.y, this.z);
+  }
+
+  destroy() { this.scene.remove(this.mesh); }
+}
+
+// ---------------- Demo Disc (Lobby teaching toy: bounces off room walls) ----------------
+// Duck-types the same {x, z, state, isGreen} shape FlyingDisc exposes so
+// DiscTornado.update() can chase it unmodified — same visual language as
+// real gameplay, deliberately different physics (bounce vs grid-clamp).
+export const DEMO_DISC_SPEED = 0.6;
+export const DEMO_TIME_TO_GREEN = 2.5;
+export const DEMO_NUDGE_ACCEL = 1.2;
+
+export class DemoDisc {
+  constructor(scene, spawnX, spawnZ, spawnY, bounds) {
+    this.scene = scene;
+    this.bounds = bounds; // { minX, maxX, minZ, maxZ }
+    this.x = spawnX; this.z = spawnZ; this.y = spawnY;
+    const angle = Math.random() * Math.PI * 2;
+    this.vx = Math.cos(angle) * DEMO_DISC_SPEED;
+    this.vz = Math.sin(angle) * DEMO_DISC_SPEED;
+    this.isGreen = false;
+    this.state = 'flying';
+    this.timer = 0;
+    this.captureTimer = 0;
+    this.done = false;
+
+    const geo = new THREE.CylinderGeometry(DISC_RADIUS, DISC_RADIUS, 0.02, 24);
+    const mat = new THREE.MeshStandardMaterial({ map: sharedDiscTexture, color: 0xff4444, roughness: 0.4 });
+    this.mesh = new THREE.Mesh(geo, mat);
+    this.mesh.position.set(this.x, this.y, this.z);
+    scene.add(this.mesh);
+  }
+
+  nudge(dirX, dirZ, dt) {
+    this.vx += dirX * DEMO_NUDGE_ACCEL * dt;
+    this.vz += dirZ * DEMO_NUDGE_ACCEL * dt;
+  }
+
+  update(dt, tornado) {
+    if (this.state === 'captured') {
+      this.captureTimer += dt;
+      const progress = Math.min(this.captureTimer / 0.8, 1);
+      if (tornado) {
+        this.x += (tornado.x - this.x) * 0.15;
+        this.z += (tornado.z - this.z) * 0.15;
+      }
+      this.mesh.position.set(this.x, this.y, this.z);
+      this.mesh.scale.setScalar(Math.max(1 - progress, 0.001));
+      if (progress >= 1) { this.destroy(); this.done = true; }
+      return;
+    }
+
+    if (!this.isGreen) {
+      this.timer += dt;
+      if (this.timer > DEMO_TIME_TO_GREEN) {
+        this.isGreen = true;
+        this.mesh.material.color.setHex(0x44ff44);
+      }
+    }
+
+    this.x += this.vx * dt;
+    this.z += this.vz * dt;
+
+    if (this.x < this.bounds.minX) { this.x = this.bounds.minX; this.vx *= -0.9; }
+    if (this.x > this.bounds.maxX) { this.x = this.bounds.maxX; this.vx *= -0.9; }
+    if (this.z < this.bounds.minZ) { this.z = this.bounds.minZ; this.vz *= -0.9; }
+    if (this.z > this.bounds.maxZ) { this.z = this.bounds.maxZ; this.vz *= -0.9; }
+
+    const speed = Math.hypot(this.vx, this.vz);
+    const maxSpeed = DEMO_DISC_SPEED * 1.4;
+    if (speed > maxSpeed) {
+      this.vx = (this.vx / speed) * maxSpeed;
+      this.vz = (this.vz / speed) * maxSpeed;
+    }
+
+    if (tornado) {
+      const normH = Math.min(this.y / TORNADO_HEIGHT, 1);
+      const tR = tornadoRadiusAtNormHeight(normH) * tornado.scale;
+      const hitR = (tR * 0.9) + (DISC_RADIUS * 0.9);
+      const dist = Math.hypot(this.x - tornado.x, this.z - tornado.z);
+      if (dist < hitR) {
+        if (this.isGreen) {
+          this.state = 'captured';
+          this.captureTimer = 0;
+        } else {
+          // Red hit: soft-repel instead of "destroying" it — this is a
+          // no-stakes decorative toy, not scored, so keep the loop
+          // visually continuous rather than adding a miss/respawn beat.
+          const dx = (this.x - tornado.x) / Math.max(dist, 0.01);
+          const dz = (this.z - tornado.z) / Math.max(dist, 0.01);
+          this.vx = dx * DEMO_DISC_SPEED;
+          this.vz = dz * DEMO_DISC_SPEED;
+        }
+      }
+    }
+
+    this.mesh.position.set(this.x, this.y, this.z);
   }
 
   destroy() { this.scene.remove(this.mesh); }
