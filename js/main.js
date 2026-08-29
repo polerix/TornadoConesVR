@@ -16,9 +16,22 @@ import { COLS, ROWS, TABLE_Y, GRID_CENTER_Z, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Z,
 
 export function startApp() {
   // ---------------- Renderer / Scene ----------------
+  // getViewportSize() prefers visualViewport over window.innerWidth/Height:
+  // more reliable on mobile Safari, where browser-chrome show/hide can
+  // change the visual viewport without the older values updating cleanly.
+  // In standalone (Home Screen) mode there's no browser chrome and the
+  // two converge, but this keeps things correct in a regular tab too.
+  function getViewportSize() {
+    const vv = window.visualViewport;
+    return vv ? { w: vv.width, h: vv.height } : { w: window.innerWidth, h: window.innerHeight };
+  }
+
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  {
+    const { w, h } = getViewportSize();
+    renderer.setSize(w, h);
+  }
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.autoClear = true;
   document.body.appendChild(renderer.domElement);
@@ -33,22 +46,31 @@ export function startApp() {
   rig.position.set(0, 1.6, 0.4);
   scene.add(rig);
 
-  const leftCamera = new THREE.PerspectiveCamera(75, (window.innerWidth / 2) / window.innerHeight, 0.01, 50);
+  const initialAspect = (() => { const { w, h } = getViewportSize(); return (w / 2) / h; })();
+
+  const leftCamera = new THREE.PerspectiveCamera(75, initialAspect, 0.01, 50);
   leftCamera.position.set(-EYE_SEPARATION / 2, 0, 0);
   rig.add(leftCamera);
 
-  const rightCamera = new THREE.PerspectiveCamera(75, (window.innerWidth / 2) / window.innerHeight, 0.01, 50);
+  const rightCamera = new THREE.PerspectiveCamera(75, initialAspect, 0.01, 50);
   rightCamera.position.set(EYE_SEPARATION / 2, 0, 0);
   rig.add(rightCamera);
 
+  let viewW = 0, viewH = 0;
+
   function resize() {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    const aspect = (window.innerWidth / 2) / window.innerHeight;
+    const { w, h } = getViewportSize();
+    viewW = w; viewH = h;
+    renderer.setSize(w, h);
+    const aspect = (w / 2) / h;
     leftCamera.aspect = aspect; leftCamera.updateProjectionMatrix();
     rightCamera.aspect = aspect; rightCamera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resize);
+  }
 
   // Lighting
   scene.add(new THREE.HemisphereLight(0x9999ff, 0x220033, 0.9));
@@ -379,7 +401,7 @@ export function startApp() {
     AudioController.updateListener(rig, gazeTarget);
 
     renderer.setScissorTest(true);
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = viewW, h = viewH;
 
     renderer.setScissor(0, 0, w / 2, h);
     renderer.setViewport(0, 0, w / 2, h);
