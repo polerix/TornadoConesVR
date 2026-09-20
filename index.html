@@ -229,5 +229,12 @@
 }
 </script>
 <script type="module" src="./js/diagnostics.js"></script>
+<script type="module">
+  // Shared features from polerix-code-toolkit, pinned to an exact release. The steward keeps the pin current
+  // (range in polerix.json). Optional: this page must keep working if the CDN is unreachable.
+  import('https://cdn.jsdelivr.net/gh/polerix/polerix-code-toolkit@v1.1.0/packages/web-core/index.mjs')
+    .then(({ initAdaptive }) => initAdaptive())
+    .catch(() => {});
+</script>
 </body>
 </html>
